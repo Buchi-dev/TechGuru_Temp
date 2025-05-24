@@ -128,10 +128,36 @@ const getUsersByType = async (req, res) => {
     }
 };
 
+// Search users by username
+const searchUsers = async (req, res) => {
+    try {
+        const { username } = req.query;
+        const user = await User.findOne({ 
+            username: new RegExp(`^${username}$`, 'i') 
+        }).select('_id username userType');
+        
+        if (!user) {
+            return res.json({ userId: null });
+        }
+        
+        res.json({
+            userId: user._id,
+            username: user.username,
+            userType: user.userType
+        });
+    } catch (error) {
+        res.status(500).json({
+            message: 'Error searching users',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     registerUser,
     loginUser,
     getUserProfile,
     updateUserProfile,
-    getUsersByType
+    getUsersByType,
+    searchUsers
 }; 

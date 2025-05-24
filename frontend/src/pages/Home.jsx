@@ -157,7 +157,12 @@ const Home = () => {
             <Col xs={12} sm={6} key={category.name}>
               <Card
                 hoverable
-                onClick={() => navigate('/products')}
+                onClick={() => navigate('/products', { 
+                  state: { 
+                    category: category.name,
+                    searchType: 'category'
+                  }
+                })}
                 style={{ textAlign: 'center' }}
               >
                 <Space direction="vertical" size="small">
@@ -169,23 +174,6 @@ const Home = () => {
               </Card>
             </Col>
           ))}
-        </Row>
-      </div>
-
-      <div style={{ marginBottom: 24 }}>
-        <Row justify="space-around" gutter={[16, 16]}>
-          <Col span={6}>
-            <Statistic title="Active Users" value={1000} prefix={<UserOutlined />} />
-          </Col>
-          <Col span={6}>
-            <Statistic title="Products" value={500} prefix={<ShoppingOutlined />} />
-          </Col>
-          <Col span={6}>
-            <Statistic title="Orders" value={2000} prefix={<ShoppingCartOutlined />} />
-          </Col>
-          <Col span={6}>
-            <Statistic title="Categories" value={20} prefix={<TagOutlined />} />
-          </Col>
         </Row>
       </div>
 

@@ -5,8 +5,12 @@ const {
     loginUser,
     getUserProfile,
     updateUserProfile,
-    getUsersByType
+    getUsersByType,
+    searchUsers
 } = require('../controllers/userController');
+
+// Search users
+router.get('/search', searchUsers);
 
 // Register new user
 router.post('/register', registerUser);

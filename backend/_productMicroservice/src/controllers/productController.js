@@ -79,11 +79,51 @@ const getAllProducts = async (req, res) => {
 // Search products
 const searchProducts = async (req, res) => {
     try {
-        const { query } = req.query;
+        const { query, sellerUsername, category, minPrice, maxPrice } = req.query;
+        let searchQuery = {};
+
+        // If searching by seller username
+        if (sellerUsername) {
+            // First get the seller's ID from the user service
+            try {
+                const userServiceResponse = await fetch(`http://localhost:3001/users/search?username=${sellerUsername}`);
+                const userData = await userServiceResponse.json();
+                
+                if (userData && userData.userId) {
+                    searchQuery.sellerId = userData.userId;
+                } else {
+                    return res.json([]); // Return empty if seller not found
+                }
+            } catch (error) {
+                console.error('Error fetching seller data:', error);
+                return res.status(500).json({
+                    message: 'Error fetching seller data',
+                    error: error.message
+                });
+            }
+        }
+
+        // If searching by product text
+        if (query) {
+            searchQuery.$text = { $search: query };
+        }
+
+        // Add category filter if provided
+        if (category) {
+            searchQuery.category = category;
+        }
+
+        // Add price range filter if provided
+        if (minPrice !== undefined || maxPrice !== undefined) {
+            searchQuery.price = {};
+            if (minPrice !== undefined) searchQuery.price.$gte = Number(minPrice);
+            if (maxPrice !== undefined) searchQuery.price.$lte = Number(maxPrice);
+        }
+
         const products = await Product.find(
-            { $text: { $search: query } },
-            { score: { $meta: 'textScore' } }
-        ).sort({ score: { $meta: 'textScore' } });
+            searchQuery,
+            query ? { score: { $meta: 'textScore' } } : {}
+        ).sort(query ? { score: { $meta: 'textScore' } } : { createdAt: -1 });
 
         res.json(products);
     } catch (error) {

@@ -1,56 +1,49 @@
 import React, { useState, useEffect } from 'react';
-import { Row, Col, Card, Input, Button, message, Spin, Empty, Modal, Descriptions, Space, Typography, Select, Slider, Form } from 'antd';
-import { ShoppingCartOutlined, SearchOutlined, EyeOutlined, FilterOutlined } from '@ant-design/icons';
+import { Row, Col, Card, Input, Button, message, Spin, Empty, Modal, Descriptions, Space, Typography, Select } from 'antd';
+import { ShoppingCartOutlined, SearchOutlined, EyeOutlined } from '@ant-design/icons';
 import { productService } from '../services/productService';
 import { cartService } from '../services/cartService';
 import { userService } from '../services/userService';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 const { Meta } = Card;
 const { Search } = Input;
 const { Text } = Typography;
 const { Option } = Select;
 
+// Predefined categories
+const CATEGORIES = ['Electronics', 'Fashion', 'Home & Living', 'Sports'];
+
 const Products = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchType, setSearchType] = useState('product');
+  const [searchValue, setSearchValue] = useState('');
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [detailsModalVisible, setDetailsModalVisible] = useState(false);
   const [sellerDetails, setSellerDetails] = useState(null);
-  const [filterModalVisible, setFilterModalVisible] = useState(false);
-  const [categories, setCategories] = useState([]);
-  const [filters, setFilters] = useState({
-    category: '',
-    minPrice: null,
-    maxPrice: null,
-    sellerUsername: ''
-  });
-  const [priceRange, setPriceRange] = useState([0, 1000]);
-  const [maxPossiblePrice, setMaxPossiblePrice] = useState(1000);
   const userId = localStorage.getItem('userId');
 
   useEffect(() => {
-    fetchProducts();
-    fetchCategories();
-    calculateMaxPrice();
-  }, []);
+    // Check if we have category data from navigation
+    if (location.state?.category && location.state?.searchType) {
+      setSearchType(location.state.searchType);
+      setSearchValue(location.state.category);
+      handleSearch(location.state.category);
+      // Clear the location state to prevent re-searching on page refresh
+      navigate(location.pathname, { replace: true });
+    } else {
+      fetchProducts();
+    }
+  }, [location]);
 
   useEffect(() => {
     if (selectedProduct?.sellerId) {
       fetchSellerDetails(selectedProduct.sellerId);
     }
   }, [selectedProduct]);
-
-  const fetchCategories = async () => {
-    try {
-      const response = await productService.getCategories();
-      setCategories(response.data);
-    } catch (error) {
-      console.error('Failed to fetch categories:', error);
-    }
-  };
 
   const fetchProducts = async () => {
     try {
@@ -74,33 +67,90 @@ const Products = () => {
   };
 
   const handleSearch = async (value) => {
+    if (!value && searchType === 'category') {
+      message.info('Please select a category');
+      return;
+    }
+    
+    setSearchValue(value);
     setLoading(true);
     try {
-      const response = await productService.searchProducts({
-        query: value,
-        ...filters
-      });
+      let searchParams = {};
+      
+      switch (searchType) {
+        case 'seller':
+          searchParams.sellerUsername = value;
+          break;
+        case 'category':
+          searchParams.category = value;
+          break;
+        default:
+          searchParams.query = value;
+      }
+      
+      const response = await productService.searchProducts(searchParams);
       setProducts(response.data);
+      
+      if (response.data.length === 0) {
+        switch (searchType) {
+          case 'seller':
+            message.info(`No products found for seller "${value}"`);
+            break;
+          case 'category':
+            message.info(`No products found in category "${value}"`);
+            break;
+          default:
+            message.info(`No products found matching "${value}"`);
+        }
+      }
     } catch (error) {
-      message.error('Search failed');
+      message.error('Search failed. Please try again.');
     }
     setLoading(false);
   };
 
-  const handleFilterSubmit = async (values) => {
-    setFilters(values);
-    setFilterModalVisible(false);
-    setLoading(true);
-    try {
-      const response = await productService.searchProducts({
-        query: searchQuery,
-        ...values
-      });
-      setProducts(response.data);
-    } catch (error) {
-      message.error('Filter application failed');
+  const handleSearchTypeChange = (type) => {
+    setSearchType(type);
+    setSearchValue('');
+    if (!loading) {
+      fetchProducts(); // Reset to all products when switching search type
     }
-    setLoading(false);
+  };
+
+  const renderSearchInput = () => {
+    if (searchType === 'category') {
+      return (
+        <Select
+          value={searchValue}
+          style={{ flex: 1 }}
+          size="large"
+          placeholder="Select a category"
+          onChange={(value) => handleSearch(value)}
+          allowClear
+          onClear={() => {
+            setSearchValue('');
+            fetchProducts();
+          }}
+        >
+          {CATEGORIES.map(category => (
+            <Option key={category} value={category}>{category}</Option>
+          ))}
+        </Select>
+      );
+    }
+
+    return (
+      <Search
+        value={searchValue}
+        placeholder={searchType === 'seller' ? "Enter seller username..." : "Search products..."}
+        allowClear
+        enterButton={<SearchOutlined />}
+        size="large"
+        onChange={(e) => setSearchValue(e.target.value)}
+        onSearch={handleSearch}
+        style={{ flex: 1 }}
+      />
+    );
   };
 
   const addToCart = async (product) => {
@@ -131,115 +181,20 @@ const Products = () => {
     setDetailsModalVisible(true);
   };
 
-  const calculateMaxPrice = async () => {
-    try {
-      const response = await productService.getAllProducts();
-      const maxPrice = Math.max(...response.data.map(product => product.price));
-      setMaxPossiblePrice(maxPrice || 1000);
-      setPriceRange([0, maxPrice || 1000]);
-    } catch (error) {
-      console.error('Failed to calculate max price:', error);
-    }
-  };
-
-  const FilterModal = () => (
-    <Modal
-      title="Advanced Filters"
-      open={filterModalVisible}
-      onCancel={() => setFilterModalVisible(false)}
-      footer={null}
-    >
-      <Form
-        initialValues={{
-          ...filters,
-          priceRange: [filters.minPrice || 0, filters.maxPrice || maxPossiblePrice]
-        }}
-        onFinish={(values) => {
-          handleFilterSubmit({
-            ...values,
-            minPrice: values.priceRange[0],
-            maxPrice: values.priceRange[1]
-          });
-        }}
-        layout="vertical"
-      >
-        <Form.Item name="category" label="Category">
-          <Select allowClear placeholder="Select category">
-            {categories.map(category => (
-              <Option key={category} value={category}>{category}</Option>
-            ))}
-          </Select>
-        </Form.Item>
-        
-        <Form.Item name="sellerUsername" label="Seller Username">
-          <Input placeholder="Enter seller username" />
-        </Form.Item>
-
-        <Form.Item name="priceRange" label="Price Range">
-          <Slider
-            range
-            min={0}
-            max={maxPossiblePrice}
-            tipFormatter={(value) => `$${value}`}
-            marks={{
-              0: '$0',
-              [maxPossiblePrice]: `$${maxPossiblePrice}`
-            }}
-          />
-        </Form.Item>
-
-        <div style={{ marginBottom: 16, textAlign: 'center' }}>
-          <Text type="secondary">
-            Selected Range: ${priceRange[0]} - ${priceRange[1]}
-          </Text>
-        </div>
-
-        <Form.Item>
-          <Space>
-            <Button type="primary" htmlType="submit">
-              Apply Filters
-            </Button>
-            <Button onClick={() => {
-              setPriceRange([0, maxPossiblePrice]);
-              setFilters({
-                category: '',
-                minPrice: null,
-                maxPrice: null,
-                sellerUsername: ''
-              });
-              setFilterModalVisible(false);
-              fetchProducts();
-            }}>
-              Reset Filters
-            </Button>
-          </Space>
-        </Form.Item>
-      </Form>
-    </Modal>
-  );
-
   return (
     <div>
       <div style={{ marginBottom: 24, display: 'flex', gap: 16 }}>
-        <Search
-          placeholder="Search products..."
-          allowClear
-          enterButton={<SearchOutlined />}
-          size="large"
-          onSearch={handleSearch}
-          style={{ flex: 1 }}
-        />
-        <Button
-          type="primary"
-          icon={<FilterOutlined />}
-          size="large"
-          onClick={() => setFilterModalVisible(true)}
+        <Select
+          value={searchType}
+          style={{ width: 150 }}
+          onChange={handleSearchTypeChange}
         >
-          Filters
-        </Button>
+          <Option value="product">Search Products</Option>
+          <Option value="seller">Search by Seller</Option>
+          <Option value="category">Search by Category</Option>
+        </Select>
+        {renderSearchInput()}
       </div>
-
-      <FilterModal />
 
       {loading ? (
         <div style={{ textAlign: 'center', padding: '50px' }}>
