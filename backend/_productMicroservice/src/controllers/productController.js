@@ -155,6 +155,35 @@ const getProductById = async (req, res) => {
 // Update product
 const updateProduct = async (req, res) => {
     try {
+        // Handle quantity updates from orders
+        if (req.body.updateType === 'decrement' && req.body.quantityChange) {
+            const product = await Product.findById(req.params.productId);
+            
+            if (!product) {
+                return res.status(404).json({
+                    message: 'Product not found'
+                });
+            }
+
+            // Update quantity
+            product.quantity = Math.max(0, product.quantity + req.body.quantityChange);
+            await product.save();
+
+            // Publish product quantity update event
+            const channel = req.app.get('channel');
+            channel.publish('product_events', 'product.quantity.updated', Buffer.from(JSON.stringify({
+                productId: product._id,
+                newQuantity: product.quantity,
+                change: req.body.quantityChange
+            })));
+
+            return res.json({
+                message: 'Product quantity updated successfully',
+                product
+            });
+        }
+
+        // Regular product update logic
         // Validate if images are provided in base64 format
         if (req.body.images) {
             // Ensure images is an array
