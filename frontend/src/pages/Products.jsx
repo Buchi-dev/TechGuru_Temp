@@ -4,6 +4,7 @@ import { ShoppingCartOutlined, SearchOutlined, EyeOutlined, FilterOutlined } fro
 import { productService } from '../services/productService';
 import { cartService } from '../services/cartService';
 import { userService } from '../services/userService';
+import { useNavigate } from 'react-router-dom';
 
 const { Meta } = Card;
 const { Search } = Input;
@@ -11,6 +12,7 @@ const { Text } = Typography;
 const { Option } = Select;
 
 const Products = () => {
+  const navigate = useNavigate();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -104,6 +106,8 @@ const Products = () => {
   const addToCart = async (product) => {
     if (!userId) {
       message.warning('Please login to add items to cart');
+      setDetailsModalVisible(false);
+      navigate('/login');
       return;
     }
 
@@ -317,8 +321,6 @@ const Products = () => {
             icon={<ShoppingCartOutlined />}
             onClick={() => {
               addToCart(selectedProduct);
-              setDetailsModalVisible(false);
-              setSellerDetails(null);
             }}
           >
             Add to Cart

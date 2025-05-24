@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Form, Input, Button, message, Tabs, List, Tag, Spin } from 'antd';
+import { Card, Form, Input, Button, message, Tabs, List, Tag, Spin, Empty } from 'antd';
 import { UserOutlined, ShopOutlined, HistoryOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { userService } from '../services/userService';
@@ -27,20 +27,12 @@ const Profile = () => {
 
   const fetchUserData = async () => {
     try {
-      const [profileRes, ordersRes] = await Promise.all([
-        userService.getProfile(userId),
-        orderService.getUserOrders(userId)
-      ]);
-
+      setLoading(true);
+      // First fetch user profile
+      const profileRes = await userService.getProfile(userId);
       setUserProfile(profileRes.data);
-      setOrders(ordersRes.data);
 
-      // If user is a seller, fetch their products
-      if (userType === 'seller') {
-        const productsRes = await productService.getSellerProducts(userId);
-        setProducts(productsRes.data);
-      }
-
+      // Set form values
       form.setFieldsValue({
         firstName: profileRes.data.firstName,
         middleName: profileRes.data.middleName,
@@ -48,9 +40,28 @@ const Profile = () => {
         username: profileRes.data.username
       });
 
-      setLoading(false);
+      // Then fetch orders and products in parallel
+      try {
+        const ordersRes = await orderService.getUserOrders(userId);
+        setOrders(ordersRes.data || []);
+      } catch (error) {
+        console.error('Failed to fetch orders:', error);
+        setOrders([]);
+      }
+
+      if (userType === 'seller') {
+        try {
+          const productsRes = await productService.getSellerProducts(userId);
+          setProducts(productsRes.data || []);
+        } catch (error) {
+          console.error('Failed to fetch products:', error);
+          setProducts([]);
+        }
+      }
     } catch (error) {
-      message.error('Failed to fetch user data');
+      message.error('Failed to fetch profile: ' + (error.response?.data?.message || 'Unknown error'));
+      navigate('/login');
+    } finally {
       setLoading(false);
     }
   };
@@ -61,7 +72,7 @@ const Profile = () => {
       message.success('Profile updated successfully');
       fetchUserData();
     } catch (error) {
-      message.error('Failed to update profile');
+      message.error('Failed to update profile: ' + (error.response?.data?.message || 'Unknown error'));
     }
   };
 
@@ -137,7 +148,7 @@ const Profile = () => {
           Order History
         </span>
       ),
-      children: (
+      children: orders.length > 0 ? (
         <List
           dataSource={orders}
           renderItem={order => (
@@ -162,6 +173,8 @@ const Profile = () => {
             </List.Item>
           )}
         />
+      ) : (
+        <Empty description="No orders found" />
       ),
     },
     userType === 'seller' && {
@@ -172,7 +185,7 @@ const Profile = () => {
           My Products
         </span>
       ),
-      children: (
+      children: products.length > 0 ? (
         <List
           dataSource={products}
           renderItem={product => (
@@ -190,6 +203,8 @@ const Profile = () => {
             </List.Item>
           )}
         />
+      ) : (
+        <Empty description="No products found" />
       ),
     }
   ].filter(Boolean);

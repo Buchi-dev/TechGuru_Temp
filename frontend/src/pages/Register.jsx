@@ -10,7 +10,8 @@ const Register = () => {
 
   const onFinish = async (values) => {
     try {
-      await userService.register(values);
+      const { confirm, ...userData } = values;
+      await userService.register(userData);
       message.success('Registration successful! Please login.');
       navigate('/login');
     } catch (error) {
